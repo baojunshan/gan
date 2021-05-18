@@ -1,20 +1,29 @@
 import numpy as np
 import random
+import argparse
+
 from torchsummary import summary
 from torchvision import datasets, transforms
 from torchvision.utils import save_image
 
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Dataset
 import torch.nn as nn
 from torch.autograd import Variable
 import torch
 
-CUDA = True
-IMAGE_SHAPE = (1, 28, 28)
-LATENT_DIM = 100
-EPOCH = 100
-BATCH = 128
-SEED = 2020
+
+parser = argparse.ArgumentParser()
+parser.add_argument("--cuda", action='store_true')
+parser.add_argument("--epoch", type=int, default=100)
+parser.add_argument("--batch", type=int, default=128)
+parser.add_argument("--seed", type=int, default=2021)
+
+config = parser.parse_args()
+
+print("option".center(30, "-"))
+for k, v in vars(config).items():
+    print(k.rjust(12), ":", v)
+print("-" * 30)
 
 
 def setup_seed(seed):
@@ -26,10 +35,17 @@ def setup_seed(seed):
 
 
 # 设置随机数种子
-setup_seed(SEED)
+setup_seed(config.seed)
 
-CUDA = CUDA and torch.cuda.is_available()
-Tensor = torch.cuda.FloatTensor if CUDA else torch.FloatTensor
+cuda = config.cuda and torch.cuda.is_available()
+
+print("cuda will be used:", cuda)
+
+
+Tensor = torch.cuda.FloatTensor if cuda else torch.FloatTensor
+
+with open("../")
+Dataset()
 
 dataloader = torch.utils.data.DataLoader(
     datasets.MNIST(
@@ -113,15 +129,18 @@ class Discriminator(nn.Module):
         return x
 
 
-generator = Generator(in_features=LATENT_DIM, image_shape=IMAGE_SHAPE)
-summary(generator, input_size=(LATENT_DIM,))
+generator = Generator(in_features=latent_dim, image_shape=image_shape)
+# summary(generator, input_size=(LATENT_DIM,))
 
-discriminator = Discriminator(image_shape=IMAGE_SHAPE)
-summary(discriminator, input_size=IMAGE_SHAPE)
+print([i for i in generator.named_children()])
+exit()
+
+discriminator = Discriminator(image_shape=image_shape)
+# summary(discriminator, input_size=IMAGE_SHAPE)
 
 loss = nn.BCELoss()
 
-if CUDA:
+if cuda:
     generator.cuda()
     discriminator.cuda()
     loss.cuda()
@@ -132,11 +151,11 @@ discriminator.apply(weights_init_normal)
 optimizer_g = torch.optim.Adam(generator.parameters(), lr=2e-4, betas=(0.5, 0.999))
 optimizer_d = torch.optim.Adam(discriminator.parameters(), lr=2e-4, betas=(0.5, 0.999))
 
-for epoch in range(EPOCH):
+for epoch in range(epoch):
     for i, (images, _) in enumerate(dataloader):
         # Adversarial ground truths
-        valid = Variable(torch.ones(images.size(0), 1), requires_grad=False)
-        fake = Variable(torch.zeros(images.size(0), 1), requires_grad=False)
+        valid = Variable(torch.ones(images.size(0), 1), requires_grad=False).to("cuda:0" if cuda else "cpu")
+        fake = Variable(torch.zeros(images.size(0), 1), requires_grad=False).to("cuda:0" if cuda else "cpu")
 
         # Configure input
         real_images = Variable(images.type(Tensor))
@@ -144,7 +163,7 @@ for epoch in range(EPOCH):
         # -----------------
         #  Train Generator
         # -----------------
-        z = Variable(Tensor(np.random.normal(0, 1, (images.shape[0], LATENT_DIM))))
+        z = Variable(Tensor(np.random.normal(0, 1, (images.shape[0], latent_dim))))
         gen_images = generator(z)
 
         optimizer_g.zero_grad()
@@ -166,7 +185,7 @@ for epoch in range(EPOCH):
 
         print(
             "[Epoch %d/%d] [Batch %d/%d] [D loss: %f] [G loss: %f]"
-            % (epoch, EPOCH, i, len(dataloader), d_loss.item(), g_loss.item())
+            % (epoch, epoch, i, len(dataloader), d_loss.item(), g_loss.item())
         )
 
         if i == len(dataloader) - 1:

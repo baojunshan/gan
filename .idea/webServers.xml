@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="WebServers">
+    <option name="servers">
+      <webServer id="5273dd45-4b06-4b9a-b7f4-4f5d25562e89" name="jianping-gan">
+        <fileTransfer accessType="SFTP" host="10.110.17.157" port="40107" sshConfigId="2d94e1ae-6a64-4b34-be80-4058449ab258" sshConfig="root@10.110.17.157:40107 agent" authAgent="true">
+          <advancedOptions>
+            <advancedOptions dataProtectionLevel="Private" passiveMode="true" shareSSLContext="true" />
+          </advancedOptions>
+        </fileTransfer>
+      </webServer>
+    </option>
+  </component>
+</project>
