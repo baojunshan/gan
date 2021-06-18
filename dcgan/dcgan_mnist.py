@@ -44,8 +44,8 @@ print("cuda will be used:", cuda)
 
 Tensor = torch.cuda.FloatTensor if cuda else torch.FloatTensor
 
-with open("../")
-Dataset()
+
+
 
 dataloader = torch.utils.data.DataLoader(
     datasets.MNIST(
@@ -56,9 +56,14 @@ dataloader = torch.utils.data.DataLoader(
             [transforms.Resize(28), transforms.ToTensor(), transforms.Normalize([0.5], [0.5])]
         ),
     ),
-    batch_size=BATCH,
+    batch_size=1,
     shuffle=True,
 )
+
+for i, _ in dataloader:
+    print(i.shape)
+    break
+exit()
 
 
 def weights_init_normal(m):
