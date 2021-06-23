@@ -11,9 +11,9 @@ parser.add_argument("--cuda", action='store_true')
 parser.add_argument("--epoch", type=int, default=100)
 parser.add_argument("--batch", type=int, default=128)
 parser.add_argument("--seed", type=int, default=2021)
-parser.add_argument("--lr", type=float, default=1e-4)
+parser.add_argument("--lr", type=float, default=2e-4)
 parser.add_argument("--image_shape", type=tuple, default=(3, 128, 128))
-parser.add_argument("--latent_dim", type=int, default=2048)
+parser.add_argument("--latent_dim", type=int, default=512)
 config = parser.parse_args()
 
 show_config(config)
@@ -29,11 +29,13 @@ data_generator = ImageLoader(
 
 generator = Generator(
     in_features=config.latent_dim,
-    image_shape=config.image_shape
+    image_shape=config.image_shape,
+    device=get_device(config.cuda)
 )
 
 discriminator = Discriminator(
-    image_shape=config.image_shape
+    image_shape=config.image_shape,
+    device=get_device(config.cuda)
 )
 
 print("Generator structure:")
@@ -56,10 +58,10 @@ trainer = Trainer(
     gen_input=config.latent_dim,
     epoch=100,
     n_epoch_per_evaluate=1,
-    n_step_per_discriminator=2,
-    # log_path="logs/gan_mnist",
+    n_step_per_discriminator=1,
+    # log_path="logs/gan_anime",
     image_save_path="../results/gan/anime",
-    device=get_device()
+    device=get_device(config.cuda)
 )
 
 trainer.train()

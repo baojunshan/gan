@@ -6,13 +6,14 @@ from torch.utils.tensorboard import SummaryWriter
 
 
 class Generator(nn.Module):
-    def __init__(self, in_features, image_shape):
+    def __init__(self, in_features, image_shape, device=None):
         super(Generator, self).__init__()
         self.in_features = in_features
         self.channels = image_shape[0]
         self.height = image_shape[1]
         self.width = image_shape[2]
         self.size = self.channels * self.width * self.height
+        self.device = device or torch.device("cpu")
 
         self.model = nn.Sequential(
             nn.Linear(in_features, 128),
@@ -27,10 +28,11 @@ class Generator(nn.Module):
             nn.BatchNorm1d(1024),
             nn.LeakyReLU(negative_slope=0.2, inplace=True),
             nn.Linear(1024, self.size),
-        )
+        ).to(self.device)
         self.activate = nn.Tanh()
 
     def forward(self, x):
+        x.to(self.device)
         x = self.model(x)
         x = x.view(-1, self.channels, self.width, self.height)
         x = self.activate(x)
@@ -38,12 +40,13 @@ class Generator(nn.Module):
 
 
 class Discriminator(nn.Module):
-    def __init__(self, image_shape):
+    def __init__(self, image_shape, device=None):
         super(Discriminator, self).__init__()
         self.channels = image_shape[0]
         self.height = image_shape[1]
         self.width = image_shape[2]
         self.size = self.channels * self.width * self.height
+        self.device = device or torch.device("cpu")
 
         self.model = nn.Sequential(
             nn.Linear(self.size, 512),
@@ -52,7 +55,7 @@ class Discriminator(nn.Module):
             nn.LeakyReLU(negative_slope=0.2, inplace=True),
             nn.Linear(256, 1),
             nn.Sigmoid()
-        )
+        ).to(self.device)
 
     def forward(self, x):
         x = x.view(-1, self.size)
@@ -95,9 +98,9 @@ class Trainer:
 
         self.loss = nn.BCELoss()
 
-        self.generator.to(self.device)
-        self.discriminator.to(self.device)
-        self.loss.to(self.device)
+        self.generator = self.generator.to(self.device)
+        self.discriminator = self.discriminator.to(self.device)
+        self.loss = self.loss.to(self.device)
 
         self.optimizer_g = torch.optim.Adam(
             params=self.generator.parameters(),
@@ -117,12 +120,14 @@ class Trainer:
             for i, images in enumerate(self.data):
                 valid = torch.autograd.Variable(torch.ones(images.shape[0], 1), requires_grad=False)
                 fake = torch.autograd.Variable(torch.zeros(images.shape[0], 1), requires_grad=False)
+                valid = valid.to(self.device)
+                fake = fake.to(self.device)
 
                 real_images = torch.autograd.Variable(torch.from_numpy(images))
-                real_images.to(self.device)
+                real_images = real_images.to(self.device)
 
                 z = torch.from_numpy(np.random.normal(0, 1, (images.shape[0], self.gen_input))).type(torch.FloatTensor)
-                z.to(self.device)
+                z = z.to(self.device)
 
                 gen_images = self.generator(z)
 
