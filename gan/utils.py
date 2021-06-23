@@ -35,6 +35,9 @@ class ImageLoader:
         self.gray_scale = gray_scale
         random.seed(random_state)
 
+    def __len__(self):
+        return len(self.paths) // self.batch_size
+
     def __iter__(self):
         data = list()
         while True:

@@ -1,6 +1,8 @@
 import torch
 from torch import nn
 import numpy as np
+import cv2
+from torch.utils.tensorboard import SummaryWriter
 
 
 class Generator(nn.Module):
@@ -65,25 +67,31 @@ class Trainer:
         discriminator,
         data,
         gen_input,
-        steps_per_epoch=100,
+        steps_per_epoch=None,
         epoch=30,
-        generator_n_per_step=1,
-        discriminator_n_per_step=1,
+        n_step_per_generator=1,
+        n_step_per_discriminator=1,
         generator_lr=1e-4,
         discriminator_lr=1e-4,
         device=torch.device("cpu"),
+        n_epoch_per_evaluate=10,
+        log_path=None,
+        image_save_path=None
     ):
         self.generator = generator
         self.discriminator = discriminator
         self.generator_lr = generator_lr
         self.discriminator_lr = discriminator_lr
-        self.generator_n_per_step = generator_n_per_step
-        self.discriminator_n_per_step = discriminator_n_per_step
+        self.n_step_per_generator = n_step_per_generator
+        self.n_step_per_discriminator = n_step_per_discriminator
         self.epoch = epoch
-        self.steps_per_epoch = steps_per_epoch
+        self.n_epoch_per_evaluate = n_epoch_per_evaluate
         self.device = device
         self.data = data
         self.gen_input = gen_input
+        self.steps_per_epoch = steps_per_epoch or len(self.data)
+        self.log_path = log_path
+        self.image_save_path = image_save_path
 
         self.loss = nn.BCELoss()
 
@@ -103,15 +111,17 @@ class Trainer:
         )
 
     def train(self):
+        writer = SummaryWriter(self.log_path) if self.log_path else None
+
         for epoch in range(self.epoch):
             for i, images in enumerate(self.data):
                 valid = torch.autograd.Variable(torch.ones(images.shape[0], 1), requires_grad=False)
                 fake = torch.autograd.Variable(torch.zeros(images.shape[0], 1), requires_grad=False)
 
-                real_images = torch.autograd.Variable(images.type(torch.FloatTensor))
+                real_images = torch.autograd.Variable(torch.from_numpy(images))
                 real_images.to(self.device)
 
-                z = torch.autograd.Variable(np.random.normal(0, 1, (images.shape[0], self.gen_input)))
+                z = torch.from_numpy(np.random.normal(0, 1, (images.shape[0], self.gen_input))).type(torch.FloatTensor)
                 z.to(self.device)
 
                 gen_images = self.generator(z)
@@ -119,7 +129,7 @@ class Trainer:
                 # -----------------
                 #  Train discriminator
                 # -----------------
-                if i % self.discriminator_n_per_step == 0:
+                if i % self.n_step_per_discriminator == 0:
                     self.optimizer_d.zero_grad()  # 以前的梯度清空
 
                     real_loss = self.loss(self.discriminator(real_images), valid)
@@ -132,19 +142,44 @@ class Trainer:
                 # -----------------
                 #  Train Generator
                 # -----------------
-                if i % self.generator_n_per_step == 0:
+                if i % self.n_step_per_generator == 0:
                     self.optimizer_g.zero_grad()
                     g_loss = self.loss(self.discriminator(gen_images), valid)
                     g_loss.backward()
                     self.optimizer_g.step()
 
                 print(
-                    f"[Epoch {epoch}/{self.epoch}] [Batch {i}/{self.steps_per_epoch}]" +
+                    f"[Epoch {epoch + 1}/{self.epoch}] [Batch {i + 1}/{self.steps_per_epoch}]" +
                     f"[D loss: {d_loss.item():5f}] [G loss: {g_loss.item():5f}]"
                 )
+                if self.log_path:
+                    writer.add_scalar("generator loss", g_loss.item(), epoch * self.steps_per_epoch + i)
+                    writer.add_scalar("discriminator loss", d_loss.item(), epoch * self.steps_per_epoch + i)
 
-            if i == len(dataloader) - 1:
-                    save_image(gen_images.data[:25], f"../results/gan/{epoch}.png", nrow=5, normalize=True)
+                if i >= self.steps_per_epoch - 1:
+                    break
 
-    def predict(self):
-        pass
+            if (epoch == 0 or (epoch + 1) % self.n_epoch_per_evaluate == 0) and self.image_save_path:
+                eval_image = self.generate(n=10)
+                cv2.imwrite(f"{self.image_save_path}/epoch_{epoch+1}.png", eval_image)
+
+    def generate(self, n=1):
+        width = self.generator.width
+        height = self.generator.width
+        channels = self.generator.channels
+
+        z = torch.from_numpy(np.random.normal(0, 1, (n**2, self.gen_input))).type(torch.FloatTensor)
+        z.to(self.device)
+
+        gen_images = self.generator(z).detach().numpy().transpose((0, 2, 3, 1))
+
+        concat_images = np.zeros((height * n, width * n, channels))
+        for i in range(n):
+            for j in range(n):
+                concat_images[
+                    i * height: (i + 1) * height,
+                    j * width: (j + 1) * width
+                ] = gen_images[i * n + j]
+        concat_images = (concat_images + 1) / 2 * 255
+        concat_images = np.round(concat_images, 0).astype(int)
+        return concat_images
