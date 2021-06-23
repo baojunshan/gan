@@ -174,9 +174,9 @@ class Trainer:
         channels = self.generator.channels
 
         z = torch.from_numpy(np.random.normal(0, 1, (n**2, self.gen_input))).type(torch.FloatTensor)
-        z.to(self.device)
+        z = z.to(self.device)
 
-        gen_images = self.generator(z).detach().numpy().transpose((0, 2, 3, 1))
+        gen_images = self.generator(z).cpu().detach().numpy().transpose((0, 2, 3, 1))
 
         concat_images = np.zeros((height * n, width * n, channels))
         for i in range(n):
