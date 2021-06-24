@@ -1,3 +1,4 @@
+import math
 import torch
 from torch import nn
 import numpy as np
@@ -15,26 +16,29 @@ class Generator(nn.Module):
         self.size = self.channels * self.width * self.height
         self.device = device or torch.device("cpu")
 
-        self.model = nn.Sequential(
-            nn.Linear(in_features, 128),
-            nn.LeakyReLU(negative_slope=0.2, inplace=True),
-            nn.Linear(128, 256),
-            nn.BatchNorm1d(256),
-            nn.LeakyReLU(negative_slope=0.2, inplace=True),
-            nn.Linear(256, 512),
-            nn.BatchNorm1d(512),
-            nn.LeakyReLU(negative_slope=0.2, inplace=True),
-            nn.Linear(512, 1024),
-            nn.BatchNorm1d(1024),
-            nn.LeakyReLU(negative_slope=0.2, inplace=True),
-            nn.Linear(1024, self.size),
+        self.linear = nn.Sequential(
+            nn.Linear(in_features, self.width * self.height * self.width // 16),
+            nn.BatchNorm1d(self.width * self.height * self.width // 16),
+            nn.ReLU(),
         ).to(self.device)
-        self.activate = nn.Tanh()
+
+        self.conv = nn.Sequential(
+            nn.Upsample(scale_factor=2),
+            nn.Conv2d(self.width, self.width // 2, 3, stride=1, padding=1),
+            nn.BatchNorm2d(self.width // 2),
+            nn.LeakyReLU(negative_slope=0.2, inplace=True),
+            nn.Upsample(scale_factor=2),
+            nn.Conv2d(self.width // 2, self.width // 4, 3, stride=1, padding=1),
+            nn.BatchNorm2d(self.width // 4),
+            nn.LeakyReLU(negative_slope=0.2, inplace=True),
+            nn.Conv2d(self.width // 4, self.channels, 3, stride=1, padding=1),
+            nn.Tanh()
+        ).to(self.device)
 
     def forward(self, x):
-        x = self.model(x)
-        x = x.view(-1, self.channels, self.width, self.height)
-        x = self.activate(x)
+        x = self.linear(x)
+        x = x.view(-1, self.width, self.height // 4, self.width // 4)
+        x = self.conv(x)
         return x
 
 
@@ -47,38 +51,49 @@ class Discriminator(nn.Module):
         self.size = self.channels * self.width * self.height
         self.device = device or torch.device("cpu")
 
-        self.model = nn.Sequential(
-            nn.Linear(self.size, 512),
+        self.conv = nn.Sequential(
+            nn.Conv2d(self.channels, 16, 3, 2, 1),
+            nn.BatchNorm2d(16),
             nn.LeakyReLU(negative_slope=0.2, inplace=True),
-            nn.Linear(512, 256),
+            nn.Dropout2d(0.25),
+            nn.Conv2d(16, 32, 3, 2, 1),
+            nn.BatchNorm2d(32),
             nn.LeakyReLU(negative_slope=0.2, inplace=True),
-            nn.Linear(256, 1),
-            nn.Sigmoid()
+            nn.Dropout2d(0.25),
+            nn.Conv2d(32, 64, 3, 2, 1),
+            nn.BatchNorm2d(64),
+            nn.LeakyReLU(negative_slope=0.2, inplace=True),
+        ).to(self.device)
+
+        self.classifier = nn.Sequential(
+            nn.Linear(64 * math.ceil(self.height / 8) * math.ceil(self.width / 8), 1),
+            nn.Sigmoid(),
         ).to(self.device)
 
     def forward(self, x):
-        x = x.view(-1, self.size)
-        x = self.model(x)
+        x = self.conv(x)
+        x = x.view(x.shape[0], -1)
+        x = self.classifier(x)
         return x
 
 
 class Trainer:
     def __init__(
-        self,
-        generator,
-        discriminator,
-        data,
-        gen_input,
-        steps_per_epoch=None,
-        epoch=30,
-        n_step_per_generator=1,
-        n_step_per_discriminator=1,
-        generator_lr=1e-4,
-        discriminator_lr=1e-4,
-        device=torch.device("cpu"),
-        n_epoch_per_evaluate=10,
-        log_path=None,
-        image_save_path=None
+            self,
+            generator,
+            discriminator,
+            data,
+            gen_input,
+            steps_per_epoch=None,
+            epoch=30,
+            n_step_per_generator=1,
+            n_step_per_discriminator=1,
+            generator_lr=1e-4,
+            discriminator_lr=1e-4,
+            device=torch.device("cpu"),
+            n_epoch_per_evaluate=10,
+            log_path=None,
+            image_save_path=None
     ):
         self.generator = generator
         self.discriminator = discriminator
@@ -141,7 +156,7 @@ class Trainer:
                     d_loss = (real_loss + fake_loss) / 2
 
                     d_loss.backward()  # 梯度下降
-                    self.optimizer_d.step()   # 更新优化器
+                    self.optimizer_d.step()  # 更新优化器
 
                 # -----------------
                 #  Train Generator
@@ -165,14 +180,14 @@ class Trainer:
 
             if (epoch == 0 or (epoch + 1) % self.n_epoch_per_evaluate == 0) and self.image_save_path:
                 eval_image = self.generate(n=10)
-                cv2.imwrite(f"{self.image_save_path}/epoch_{epoch+1}.png", eval_image)
+                cv2.imwrite(f"{self.image_save_path}/epoch_{epoch + 1}.png", eval_image)
 
     def generate(self, n=1):
         width = self.generator.width
         height = self.generator.width
         channels = self.generator.channels
 
-        z = torch.from_numpy(np.random.normal(0, 1, (n**2, self.gen_input))).type(torch.FloatTensor)
+        z = torch.from_numpy(np.random.normal(0, 1, (n ** 2, self.gen_input))).type(torch.FloatTensor)
         z = z.to(self.device)
 
         gen_images = self.generator(z).cpu().detach().numpy().transpose((0, 2, 3, 1))
@@ -181,8 +196,8 @@ class Trainer:
         for i in range(n):
             for j in range(n):
                 concat_images[
-                    i * height: (i + 1) * height,
-                    j * width: (j + 1) * width
+                i * height: (i + 1) * height,
+                j * width: (j + 1) * width
                 ] = gen_images[i * n + j]
         concat_images = (concat_images + 1) / 2 * 255
         concat_images = np.round(concat_images, 0).astype(int)

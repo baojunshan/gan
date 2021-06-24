@@ -8,12 +8,12 @@ from utils import ImageLoader, show_config, setup_seed, get_device
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--cuda", action='store_true')
-parser.add_argument("--epoch", type=int, default=100)
-parser.add_argument("--batch", type=int, default=128)
+parser.add_argument("--epoch", type=int, default=1000)
+parser.add_argument("--batch", type=int, default=256)
 parser.add_argument("--seed", type=int, default=2021)
 parser.add_argument("--lr", type=float, default=2e-4)
-parser.add_argument("--image_shape", type=tuple, default=(1, 28, 28))
-parser.add_argument("--latent_dim", type=int, default=100)
+parser.add_argument("--image_shape", type=tuple, default=(3, 128, 128))
+parser.add_argument("--latent_dim", type=int, default=256)
 config = parser.parse_args()
 
 show_config(config)
@@ -21,10 +21,10 @@ show_config(config)
 setup_seed(config.seed)
 
 data_generator = ImageLoader(
-    path="../data/mnist",
-    batch_size=64,
-    image_shape=(28, 28),
-    gray_scale=True
+    path="../data/anime",
+    batch_size=config.batch,
+    image_shape=(config.image_shape[1], config.image_shape[2]),
+    gray_scale=False
 )
 
 generator = Generator(
@@ -56,10 +56,11 @@ trainer = Trainer(
     discriminator=discriminator,
     data=data_generator,
     gen_input=config.latent_dim,
-    epoch=2000,
-    n_epoch_per_evaluate=200,
-    # log_path="logs/gan_mnist",
-    image_save_path="../results/gan/mnist",
+    epoch=config.epoch,
+    n_epoch_per_evaluate=20,
+    n_step_per_discriminator=1,
+    # log_path="logs/gan_anime",
+    image_save_path="../results/dcgan/anime",
     device=get_device(config.cuda)
 )
 

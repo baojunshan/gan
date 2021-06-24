@@ -8,8 +8,8 @@ from utils import ImageLoader, show_config, setup_seed, get_device
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--cuda", action='store_true')
-parser.add_argument("--epoch", type=int, default=100)
-parser.add_argument("--batch", type=int, default=128)
+parser.add_argument("--epoch", type=int, default=1000)
+parser.add_argument("--batch", type=int, default=256)
 parser.add_argument("--seed", type=int, default=2021)
 parser.add_argument("--lr", type=float, default=2e-4)
 parser.add_argument("--image_shape", type=tuple, default=(3, 128, 128))
@@ -56,8 +56,8 @@ trainer = Trainer(
     discriminator=discriminator,
     data=data_generator,
     gen_input=config.latent_dim,
-    epoch=100,
-    n_epoch_per_evaluate=1,
+    epoch=config.epoch,
+    n_epoch_per_evaluate=20,
     n_step_per_discriminator=1,
     # log_path="logs/gan_anime",
     image_save_path="../results/gan/anime",
