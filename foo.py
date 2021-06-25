@@ -5,6 +5,16 @@ import matplotlib.pyplot as plt
 from PIL import Image
 
 
+def gen():
+    for i in range(10):
+        yield i
+
+
+g = gen()
+
+print(g.__next__())
+exit()
+
 def load_mnist_image(path, filename, type='train'):
     full_name = os.path.join(path, filename)
     fp = open(full_name, 'rb')
