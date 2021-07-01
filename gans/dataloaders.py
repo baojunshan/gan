@@ -3,6 +3,13 @@ from torchvision import datasets, transforms
 
 
 def get_dataloader(path, shape, name=None, batch=64, n_jobs=1, shuffle=True):
+    if isinstance(shape, int):
+        shape = (shape, shape)
+    elif len(shape) == 3:
+        shape = (shape[1], shape[2])
+    elif len(shape) == 1:
+        shape = (shape[0], shape[0])
+
     transform_compose = transforms.Compose([
         transforms.Resize(shape),
         transforms.ToTensor()
@@ -21,7 +28,7 @@ def get_dataloader(path, shape, name=None, batch=64, n_jobs=1, shuffle=True):
         dataset=dataset,
         batch_size=batch,
         shuffle=shuffle,
-        num_workers=n_jobs,
+        # num_workers=n_jobs,
     )
 
 
