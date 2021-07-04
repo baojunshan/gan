@@ -1,17 +1,18 @@
+import os
 import torch
 from torch import nn
 import numpy as np
 import cv2
-from torch.utils.tensorboard import SummaryWriter
+import time
 
 
 class Generator(nn.Module):
     def __init__(self, in_features, image_shape, device=None):
         super(Generator, self).__init__()
         self.in_features = in_features
-        self.channels = image_shape[0]
-        self.height = image_shape[1]
-        self.width = image_shape[2]
+        self.channels = int(image_shape[0])
+        self.height = int(image_shape[1])
+        self.width = int(image_shape[2])
         self.size = self.channels * self.width * self.height
         self.device = device or torch.device("cpu")
 
@@ -41,9 +42,9 @@ class Generator(nn.Module):
 class Discriminator(nn.Module):
     def __init__(self, image_shape, device=None):
         super(Discriminator, self).__init__()
-        self.channels = image_shape[0]
-        self.height = image_shape[1]
-        self.width = image_shape[2]
+        self.channels = int(image_shape[0])
+        self.height = int(image_shape[1])
+        self.width = int(image_shape[2])
         self.size = self.channels * self.width * self.height
         self.device = device or torch.device("cpu")
 
@@ -77,7 +78,6 @@ class Trainer:
         discriminator_lr=1e-4,
         device=torch.device("cpu"),
         n_epoch_per_evaluate=10,
-        log_path=None,
         image_save_path=None
     ):
         self.generator = generator
@@ -92,14 +92,14 @@ class Trainer:
         self.data = data
         self.gen_input = gen_input
         self.steps_per_epoch = steps_per_epoch or len(self.data)
-        self.log_path = log_path
         self.image_save_path = image_save_path
+        if self.image_save_path is not None and not os.path.exists(self.image_save_path):
+            os.mkdir(self.image_save_path)
 
-        self.loss = nn.BCELoss()
+        self.loss = nn.BCELoss().to(self.device)
 
         self.generator = self.generator.to(self.device)
         self.discriminator = self.discriminator.to(self.device)
-        self.loss = self.loss.to(self.device)
 
         self.optimizer_g = torch.optim.Adam(
             params=self.generator.parameters(),
@@ -113,20 +113,14 @@ class Trainer:
         )
 
     def train(self):
-        writer = SummaryWriter(self.log_path) if self.log_path else None
-
         for epoch in range(self.epoch):
+            start_time = time.time()
             for i, images in enumerate(self.data):
-                valid = torch.autograd.Variable(torch.ones(images.shape[0], 1), requires_grad=False)
-                fake = torch.autograd.Variable(torch.zeros(images.shape[0], 1), requires_grad=False)
-                valid = valid.to(self.device)
-                fake = fake.to(self.device)
+                valid = torch.autograd.Variable(torch.ones(images.shape[0], 1), requires_grad=False).to(self.device)
+                fake = torch.autograd.Variable(torch.zeros(images.shape[0], 1), requires_grad=False).to(self.device)
 
-                real_images = torch.autograd.Variable(torch.from_numpy(images))
-                real_images = real_images.to(self.device)
-
-                z = torch.from_numpy(np.random.normal(0, 1, (images.shape[0], self.gen_input))).type(torch.FloatTensor)
-                z = z.to(self.device)
+                real_images = torch.autograd.Variable(torch.from_numpy(images)).to(self.device)
+                z = torch.from_numpy(np.random.normal(0, 1, (images.shape[0], self.gen_input))).type(torch.FloatTensor).to(self.device)
 
                 gen_images = self.generator(z)
 
@@ -152,16 +146,22 @@ class Trainer:
                     g_loss.backward()
                     self.optimizer_g.step()
 
+                # print("\r", " " * 60, end="")
                 print(
-                    f"[Epoch {epoch + 1}/{self.epoch}] [Batch {i + 1}/{self.steps_per_epoch}]" +
-                    f"[D loss: {d_loss.item():5f}] [G loss: {g_loss.item():5f}]"
+                    f"\r[Epoch {epoch + 1:03}/{self.epoch:03}]",
+                    f"Batch {i + 1:05}/{self.steps_per_epoch:05}",
+                    f"D loss: {d_loss.item():.5f} G loss: {g_loss.item():.5f}",
+                    end=""
                 )
-                if self.log_path:
-                    writer.add_scalar("generator loss", g_loss.item(), epoch * self.steps_per_epoch + i)
-                    writer.add_scalar("discriminator loss", d_loss.item(), epoch * self.steps_per_epoch + i)
 
                 if i >= self.steps_per_epoch - 1:
                     break
+            print(f"\r" + " " * 70, end="")
+            print(
+                f"\r[Epoch {epoch + 1}/{self.epoch}]",
+                f"D loss {d_loss.item():5f} G loss {g_loss.item():5f}",
+                f"Time {time.time() - start_time:.2f}"
+            )
 
             if (epoch == 0 or (epoch + 1) % self.n_epoch_per_evaluate == 0) and self.image_save_path:
                 eval_image = self.generate(n=10)
@@ -187,3 +187,8 @@ class Trainer:
         concat_images = (concat_images + 1) / 2 * 255
         concat_images = np.round(concat_images, 0).astype(int)
         return concat_images
+
+
+if __name__ == "__main__":
+    data = np.random.normal(0, 1, (2**2, 10))
+    print(data)

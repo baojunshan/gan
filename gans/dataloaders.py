@@ -12,7 +12,8 @@ def get_dataloader(path, shape, name=None, batch=64, n_jobs=1, shuffle=True):
 
     transform_compose = transforms.Compose([
         transforms.Resize(shape),
-        transforms.ToTensor()
+        transforms.ToTensor(),
+        transforms.Normalize([0.5], [0.5]),
     ])
 
     if name == "mnist":
