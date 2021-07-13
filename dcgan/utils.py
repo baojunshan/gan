@@ -21,18 +21,26 @@ def setup_seed(seed):
 
 
 class ImageLoader:
-    def __init__(self, path, batch_size=64, image_shape=(1, 28, 28), pre_load=False, random_state=2021):
+    def __init__(self, path, batch_size=64, image_shape=(1, 28, 28), label=False, pre_load=False, random_state=2021):
         self.paths = glob.glob(path)
         self.batch_size = batch_size
+        self.label = label
         self.pre_load = pre_load
         self.channel = image_shape[0]
         self.height = image_shape[1]
         self.width = image_shape[2]
+        self.label2idx_ = dict()
+        self.idx2label_ = dict()
         random.seed(random_state)
 
         self.images = None
         if self.pre_load:
             self.images = [cv2.imread(f) for f in self.paths]
+        if self.label:
+            labels = list(set(p.split("/")[-2] for p in self.paths))
+            labels.sort(reverse=False)
+            self.idx2label_ = dict(enumerate(labels))
+            self.label2idx_ = dict((v, k) for k, v in self.idx2label_.items())
 
     def preprocess(self, img):
         img = cv2.resize(img, (self.height, self.width), interpolation=cv2.INTER_LINEAR)
@@ -54,7 +62,12 @@ class ImageLoader:
             for idx in range(len(self.paths)):
                 img = self.images[idx] if self.pre_load else cv2.imread(self.paths[idx])
                 img = img if self.channel != 1 else cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-                data.append(self.preprocess(img))
+                if self.label:
+                    label = self.paths[idx].split()[-2]
+                    label_idx = self.label2idx_[label]
+                    data.append((self.preprocess(img), label_idx))
+                else:
+                    data.append(self.preprocess(img))
                 if len(data) == self.batch_size:
                     data = np.array(data)
                     yield data
