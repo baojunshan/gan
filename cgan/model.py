@@ -4,6 +4,7 @@ from torch import nn
 import numpy as np
 import cv2
 import os
+import time
 
 
 class Generator(nn.Module):
@@ -130,14 +131,15 @@ class Trainer:
     def train(self):
         for epoch in range(self.epoch):
             start_time = time.time()
-            for i, images in enumerate(self.data):
+            for i, (images, labels) in enumerate(self.data):
                 valid = torch.autograd.Variable(torch.ones(images.shape[0], 1), requires_grad=False).to(self.device)
                 fake = torch.autograd.Variable(torch.zeros(images.shape[0], 1), requires_grad=False).to(self.device)
 
                 real_images = torch.autograd.Variable(torch.from_numpy(images)).to(self.device)
+                labels = torch.autograd.Variable(torch.from_numpy(labels.reshape(1-, 1))).to(self.device)
                 z = torch.from_numpy(np.random.normal(0, 1, (images.shape[0], self.gen_input))).type(torch.FloatTensor).to(self.device)
 
-                gen_images = self.generator(z)
+                gen_images = self.generator(z, labels)
 
                 # -----------------
                 #  Train discriminator
@@ -145,8 +147,8 @@ class Trainer:
                 if i % self.n_step_per_discriminator == 0:
                     self.optimizer_d.zero_grad()  # 以前的梯度清空
 
-                    real_loss = self.loss(self.discriminator(real_images), valid)
-                    fake_loss = self.loss(self.discriminator(gen_images.detach()), fake)  # 不更新生成器
+                    real_loss = self.loss(self.discriminator(real_images, labels), valid)
+                    fake_loss = self.loss(self.discriminator(gen_images.detach(), labels), fake)  # 不更新生成器
                     d_loss = (real_loss + fake_loss) / 2
 
                     d_loss.backward()  # 梯度下降
@@ -157,7 +159,7 @@ class Trainer:
                 # -----------------
                 if i % self.n_step_per_generator == 0:
                     self.optimizer_g.zero_grad()
-                    g_loss = self.loss(self.discriminator(gen_images), valid)
+                    g_loss = self.loss(self.discriminator(gen_images, labels), valid)
                     g_loss.backward()
                     self.optimizer_g.step()
 
@@ -187,10 +189,10 @@ class Trainer:
         height = self.generator.width
         channels = self.generator.channels
 
-        z = torch.from_numpy(np.random.normal(0, 1, (n**2, self.gen_input))).type(torch.FloatTensor)
-        z = z.to(self.device)
+        z = torch.from_numpy(np.random.normal(0, 1, (n**2, self.gen_input))).type(torch.FloatTensor).to(self.device)
+        labels = torch.from_numpy(np.array([[i] for _ in range(n) for i in range(n)])).to(self.device)
 
-        gen_images = self.generator(z).cpu().detach().numpy().transpose((0, 2, 3, 1))
+        gen_images = self.generator(z, labels ).cpu().detach().numpy().transpose((0, 2, 3, 1))
 
         concat_images = np.zeros((height * n, width * n, channels))
         for i in range(n):

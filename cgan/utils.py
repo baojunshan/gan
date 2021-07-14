@@ -54,6 +54,7 @@ class ImageLoader:
 
     def __iter__(self):
         data = list()
+        labels = list()
         while True:
             if self.pre_load:
                 random.shuffle(self.images)
@@ -65,12 +66,15 @@ class ImageLoader:
                 if self.label:
                     label = self.paths[idx].split()[-2]
                     label_idx = self.label2idx_[label]
-                    data.append((self.preprocess(img), label_idx))
-                else:
-                    data.append(self.preprocess(img))
+                    labels.append(labels)
+                data.append(self.preprocess(img))
                 if len(data) == self.batch_size:
                     data = np.array(data)
-                    yield data
+                    if self.label:
+                        labels = np.array(labels)
+                        yield data, labels
+                    else:
+                        yield data
                     data = list()
 
 
