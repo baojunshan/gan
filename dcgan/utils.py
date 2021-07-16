@@ -70,7 +70,6 @@ class ImageLoader:
                 if self.label:
                     label = self.paths[idx].split("/")[-2]
                     label_idx = self.label2idx_[label]
-                    print(label_idx, self.paths[idx])
                     labels.append(label_idx)
                 data.append(self.preprocess(img))
                 if len(data) == self.batch_size:
