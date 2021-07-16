@@ -1,5 +1,6 @@
 import argparse
 import torch
+from torchsummary import summary
 
 from model import Generator, Discriminator, Trainer
 from utils import ImageLoader, show_config, setup_seed
@@ -17,11 +18,13 @@ parser.add_argument("--lr_g", type=float, default=2e-4)
 parser.add_argument("--lr_d", type=float, default=2e-4)
 parser.add_argument("--image_shape", type=literal_eval, default='(1, 32, 32)')
 parser.add_argument("--latent_dim", type=int, default=100)
+parser.add_argument("--label_emb_size", type=int, default=20)
+parser.add_argument("--label_size", type=int, default=10)
 parser.add_argument("--n_epoch_per_evaluate", type=int, default=20)
 parser.add_argument("--data_preload", type=bool, default=True)
 parser.add_argument("--n_step_per_d", type=int, default=1)
 parser.add_argument("--n_step_per_g", type=int, default=1)
-parser.add_argument("--result_path", type=str, default="../results/gan_mnist")
+parser.add_argument("--result_path", type=str, default="../results/cgan_mnist")
 config = parser.parse_args()
 show_config(config)
 
@@ -32,6 +35,7 @@ device = torch.device("cuda:0" if cuda else "cpu")
 
 data_generator = ImageLoader(
     path=config.data_path,
+    label=True,
     batch_size=config.batch,
     image_shape=config.image_shape,
     pre_load=config.data_preload,
@@ -40,11 +44,15 @@ data_generator = ImageLoader(
 generator = Generator(
     in_features=config.latent_dim,
     image_shape=config.image_shape,
+    label_emb_size=config.label_emb_size,
+    label_size=config.label_size,
     device=device
 )
 
 discriminator = Discriminator(
     image_shape=config.image_shape,
+    label_emb_size=config.label_emb_size,
+    label_size=config.label_size,
     device=device
 )
 

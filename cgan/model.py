@@ -18,46 +18,52 @@ class Generator(nn.Module):
         self.label_emb_size = label_emb_size
         self.label_size = label_size
         self.device = device or torch.device("cpu")
+        self.filters = [128, 64, 32, self.channels]
 
         self.emb = nn.Embedding(label_size, label_emb_size)
-        self.backbone = nn.Sequential(
-            *self.block(self.in_features + label_emb_size, 128, normalize=False),
-            *self.block(128, 256),
-            *self.block(256, 512),
-            *self.block(512, 1024),
-            nn.Linear(1024, self.size),
-            nn.Tanh(),  # -1 ~ 1
-        )
+        self.dense = nn.Linear(self.in_features + label_emb_size, self.size * self.filters[0] // 64)
+
+        cov_layers = list()
+        for c_in, c_out in zip(self.filters[:-1], self.filters[1:]):
+            cov_layers += self.block(c_in, c_out)
+        self.backbone = nn.Sequential(*cov_layers)
+        self.activation = nn.Tanh()
 
     @staticmethod
-    def block(in_features, out_features, normalize=True):
-        layers = [nn.Linear(in_features, out_features)]
-        if normalize:
-            layers.append(nn.BatchNorm1d(out_features))
-        layers.append(nn.LeakyReLU(0.2, inplace=True))
+    def block(in_channels, out_channels):
+        layers = [
+            nn.BatchNorm2d(in_channels),
+            nn.ReLU(inplace=True),
+            nn.Upsample(scale_factor=2),
+            nn.Conv2d(in_channels, out_channels, 3, stride=1, padding=1),
+        ]
         return layers
 
     def forward(self, inputs, labels):
         label_emb = self.emb(labels)  # batch, emb_size
         inputs = torch.cat([inputs, label_emb], dim=1)  # batch, latent + emb_size
+        inputs = self.dense(inputs)
+        inputs = inputs.view(-1, self.filters[0], self.height // 8, self.width // 8)
+
         outputs = self.backbone(inputs)
-        images = outputs.view(-1, self.channels, self.height, self.width)
-        return images
+        outputs = self.activation(outputs)
+        return outputs
 
 
 class Discriminator(nn.Module):
-    def __init__(self, image_shape, label_emb_size, device=None):
+    def __init__(self, image_shape, label_emb_size, label_size, device=None):
         super(Discriminator, self).__init__()
         self.channels = image_shape[0]
         self.height = image_shape[1]
         self.width = image_shape[2]
         self.size = self.channels * self.width * self.height
         self.label_emb_size = label_emb_size
+        self.label_size = label_size
         self.device = device or torch.device("cpu")
 
+        self.label_emb = nn.Embedding(label_size, label_emb_size)
         self.model = nn.Sequential(
-            *self.block(self.size + self.label_emb_size, 1024),
-            *self.block(1024, 512),
+            *self.block(self.size + self.label_emb_size, 512),
             *self.block(512, 128),
             nn.Linear(128, 1),
             nn.Sigmoid(),
@@ -74,7 +80,8 @@ class Discriminator(nn.Module):
 
     def forward(self, inputs, labels):
         inputs = inputs.view(inputs.shape[0], -1)
-        inputs = torch.cat([inputs, labels], dim=-1)
+        label_emb = self.label_emb(labels)
+        inputs = torch.cat([inputs, label_emb], dim=-1)
         outputs = self.model(inputs)
         return outputs
 
@@ -112,7 +119,7 @@ class Trainer:
         if self.image_save_path is not None and not os.path.exists(self.image_save_path):
             os.mkdir(self.image_save_path)
 
-        self.loss = nn.BCELoss().to(self.device)
+        self.loss = nn.MSELoss().to(self.device)
 
         self.generator = self.generator.to(self.device)
         self.discriminator = self.discriminator.to(self.device)
@@ -136,9 +143,11 @@ class Trainer:
                 fake = torch.autograd.Variable(torch.zeros(images.shape[0], 1), requires_grad=False).to(self.device)
 
                 real_images = torch.autograd.Variable(torch.from_numpy(images)).to(self.device)
-                labels = torch.autograd.Variable(torch.from_numpy(labels.reshape(1-, 1))).to(self.device)
+                labels = torch.autograd.Variable(torch.from_numpy(labels)).to(self.device)
                 z = torch.from_numpy(np.random.normal(0, 1, (images.shape[0], self.gen_input))).type(torch.FloatTensor).to(self.device)
 
+                self.discriminator.train()
+                self.generator.train()
                 gen_images = self.generator(z, labels)
 
                 # -----------------
@@ -190,9 +199,10 @@ class Trainer:
         channels = self.generator.channels
 
         z = torch.from_numpy(np.random.normal(0, 1, (n**2, self.gen_input))).type(torch.FloatTensor).to(self.device)
-        labels = torch.from_numpy(np.array([[i] for _ in range(n) for i in range(n)])).to(self.device)
+        labels = torch.from_numpy(np.array([i for _ in range(n) for i in range(n)])).to(self.device)
 
-        gen_images = self.generator(z, labels ).cpu().detach().numpy().transpose((0, 2, 3, 1))
+        self.generator.eval()
+        gen_images = self.generator(z, labels).cpu().detach().numpy().transpose((0, 2, 3, 1))
 
         concat_images = np.zeros((height * n, width * n, channels))
         for i in range(n):

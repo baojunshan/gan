@@ -12,7 +12,7 @@
       <paths name="root@10.110.17.157:40107 agent">
         <serverdata>
           <mappings>
-            <mapping local="$PROJECT_DIR$" web="/" />
+            <mapping deploy="/home/baojunshan/gan" local="$PROJECT_DIR$" web="/" />
           </mappings>
         </serverdata>
       </paths>

@@ -1,6 +1,5 @@
 import argparse
 import torch
-from torchsummary import summary
 
 from model import Generator, Discriminator, Trainer
 from utils import ImageLoader, show_config, setup_seed
@@ -46,20 +45,6 @@ generator = Generator(
 
 discriminator = Discriminator(
     image_shape=config.image_shape,
-    device=device
-)
-
-print("Generator structure:")
-summary(
-    model=generator,
-    input_size=(config.latent_dim,),
-    device=device
-)
-
-print("Discriminator structure:")
-summary(
-    model=discriminator,
-    input_size=config.image_shape,
     device=device
 )
 

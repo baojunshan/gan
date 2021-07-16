@@ -31,6 +31,7 @@ class ImageLoader:
         self.width = image_shape[2]
         self.label2idx_ = dict()
         self.idx2label_ = dict()
+        self.random_state = random_state
         random.seed(random_state)
 
         self.images = None
@@ -57,16 +58,20 @@ class ImageLoader:
         labels = list()
         while True:
             if self.pre_load:
+                random.seed(self.random_state)
                 random.shuffle(self.images)
+                random.seed(self.random_state)
+                random.shuffle(self.paths)
             else:
                 random.shuffle(self.paths)
             for idx in range(len(self.paths)):
                 img = self.images[idx] if self.pre_load else cv2.imread(self.paths[idx])
                 img = img if self.channel != 1 else cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
                 if self.label:
-                    label = self.paths[idx].split()[-2]
+                    label = self.paths[idx].split("/")[-2]
                     label_idx = self.label2idx_[label]
-                    labels.append(labels)
+                    print(label_idx, self.paths[idx])
+                    labels.append(label_idx)
                 data.append(self.preprocess(img))
                 if len(data) == self.batch_size:
                     data = np.array(data)
@@ -76,6 +81,7 @@ class ImageLoader:
                     else:
                         yield data
                     data = list()
+                    labels = list()
 
 
 if __name__ == "__main__":

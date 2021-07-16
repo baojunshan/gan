@@ -122,6 +122,8 @@ class Trainer:
                 real_images = torch.autograd.Variable(torch.from_numpy(images)).to(self.device)
                 z = torch.from_numpy(np.random.normal(0, 1, (images.shape[0], self.gen_input))).type(torch.FloatTensor).to(self.device)
 
+                self.discriminator.train()
+                self.generator.train()
                 gen_images = self.generator(z)
 
                 # -----------------
@@ -175,6 +177,7 @@ class Trainer:
         z = torch.from_numpy(np.random.normal(0, 1, (n**2, self.gen_input))).type(torch.FloatTensor)
         z = z.to(self.device)
 
+        self.generator.train()
         gen_images = self.generator(z).cpu().detach().numpy().transpose((0, 2, 3, 1))
 
         concat_images = np.zeros((height * n, width * n, channels))
