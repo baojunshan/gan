@@ -1,0 +1,7 @@
+torch                  1.7.1
+torchvision
+numpy
+imageio
+cv2
+glob
+torchsummary
