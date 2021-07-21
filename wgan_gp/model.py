@@ -58,20 +58,23 @@ class Discriminator(nn.Module):
 
         self.conv = nn.Sequential(
             nn.Conv2d(self.channels, 16, 3, 2, 1),
-            nn.BatchNorm2d(16),
+            # nn.BatchNorm2d(16),
+            nn.LayerNorm((16, self.height // 2, self.width // 2)),
             nn.LeakyReLU(negative_slope=0.2, inplace=True),
             nn.Dropout2d(0.25),
             nn.Conv2d(16, 32, 3, 2, 1),
-            nn.BatchNorm2d(32),
+            nn.LayerNorm((32, self.height // 4, self.width // 4)),
+            # nn.BatchNorm2d(32),
             nn.LeakyReLU(negative_slope=0.2, inplace=True),
             nn.Dropout2d(0.25),
             nn.Conv2d(32, 64, 3, 2, 1),
-            nn.BatchNorm2d(64),
+            nn.LayerNorm((64, self.height // 8, self.width // 8)),
+            # nn.BatchNorm2d(64),
             nn.LeakyReLU(negative_slope=0.2, inplace=True),
         ).to(self.device)
 
         self.classifier = nn.Sequential(
-            nn.Linear(64 * math.ceil(self.height / 8) * math.ceil(self.width / 8), 1),
+            nn.Linear(self.height * self.width, 1),
             # nn.Sigmoid(),
         ).to(self.device)
 
@@ -95,7 +98,7 @@ class Trainer:
         n_step_per_discriminator=1,
         generator_lr=1e-4,
         discriminator_lr=1e-4,
-        weight_clips=(-0.01, 0.01),
+        lambda_gp=10,
         device=torch.device("cpu"),
         n_epoch_per_evaluate=10,
         image_save_path=None
@@ -104,7 +107,7 @@ class Trainer:
         self.discriminator = discriminator
         self.generator_lr = generator_lr
         self.discriminator_lr = discriminator_lr
-        self.weight_clips = weight_clips
+        self.lambda_gp = lambda_gp
         self.n_step_per_generator = n_step_per_generator
         self.n_step_per_discriminator = n_step_per_discriminator
         self.epoch = epoch
@@ -117,28 +120,46 @@ class Trainer:
         if self.image_save_path is not None and not os.path.exists(self.image_save_path):
             os.mkdir(self.image_save_path)
 
-        # self.loss = nn.BCELoss().to(self.device)
-
         self.generator = self.generator.to(self.device)
         self.discriminator = self.discriminator.to(self.device)
 
-        # self.optimizer_g = torch.optim.Adam(
-        #     params=self.generator.parameters(),
-        #     lr=self.generator_lr,
-        #     betas=(0.5, 0.999)
-        # )
-        # self.optimizer_d = torch.optim.Adam(
-        #     params=self.discriminator.parameters(),
-        #     lr=self.discriminator_lr,
-        #     betas=(0.5, 0.999)
-        # )
-        self.optimizer_g = torch.optim.RMSprop(
-            params=generator.parameters(),
-            lr=self.generator_lr)
-        self.optimizer_d = torch.optim.RMSprop(
-            params=discriminator.parameters(),
-            lr=discriminator_lr
+        self.optimizer_g = torch.optim.Adam(
+            params=self.generator.parameters(),
+            lr=self.generator_lr,
+            betas=(0.5, 0.999)
         )
+        self.optimizer_d = torch.optim.Adam(
+            params=self.discriminator.parameters(),
+            lr=self.discriminator_lr,
+            betas=(0.5, 0.999)
+        )
+        # self.optimizer_g = torch.optim.RMSprop(
+        #     params=generator.parameters(),
+        #     lr=self.generator_lr)
+        # self.optimizer_d = torch.optim.RMSprop(
+        #     params=discriminator.parameters(),
+        #     lr=discriminator_lr
+        # )
+
+    def compute_gradient_penalty(self, discriminator, real_samples, fake_samples):
+        alpha = torch.FloatTensor(np.random.random((real_samples.size(0), 1, 1, 1))).to(self.device)
+        interpolates = (alpha * real_samples + ((1 - alpha) * fake_samples)).requires_grad_(True)
+        d_interpolates = discriminator(interpolates)
+        fake = torch.autograd.Variable(
+            torch.FloatTensor(real_samples.shape[0], 1).fill_(1.0),
+            requires_grad=False
+        ).to(self.device)
+        gradients = torch.autograd.grad(
+            outputs=d_interpolates,
+            inputs=interpolates,
+            grad_outputs=fake,
+            create_graph=True,
+            retain_graph=True,
+            only_inputs=True,
+        )[0]
+        gradients = gradients.view(gradients.size(0), -1)
+        gradient_penalty = ((gradients.norm(2, dim=1) - 1) ** 2).mean()
+        return gradient_penalty
 
     def train(self):
         for epoch in range(self.epoch):
@@ -160,12 +181,15 @@ class Trainer:
                     d_loss = -torch.mean(self.discriminator(real_images)) +\
                               torch.mean(self.discriminator(gen_images.detach()))
 
+                    gradient_penalty = self.compute_gradient_penalty(
+                        self.discriminator,
+                        real_images.data,
+                        gen_images.data
+                    )
+                    d_loss += gradient_penalty * self.lambda_gp
+
                     d_loss.backward()  # 梯度下降
                     self.optimizer_d.step()   # 更新优化器
-
-                    # 权重截断
-                    for p in self.discriminator.parameters():
-                        p.data.clamp_(self.weight_clips[0], self.weight_clips[1])
 
                 # -----------------
                 #  Train Generator

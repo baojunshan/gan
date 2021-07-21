@@ -1,4 +1,3 @@
-import math
 import torch
 from torch import nn
 import numpy as np
@@ -71,7 +70,7 @@ class Discriminator(nn.Module):
         ).to(self.device)
 
         self.classifier = nn.Sequential(
-            nn.Linear(64 * math.ceil(self.height / 8) * math.ceil(self.width / 8), 1),
+            nn.Linear(self.height * self.width, 1),
             # nn.Sigmoid(),
         ).to(self.device)
 
@@ -84,29 +83,31 @@ class Discriminator(nn.Module):
 
 class Trainer:
     def __init__(
-        self,
-        generator,
-        discriminator,
-        data,
-        gen_input,
-        steps_per_epoch=None,
-        epoch=30,
-        n_step_per_generator=1,
-        n_step_per_discriminator=1,
-        generator_lr=1e-4,
-        discriminator_lr=1e-4,
-        weight_clips=(-0.01, 0.01),
-        device=torch.device("cpu"),
-        n_epoch_per_evaluate=10,
-        image_save_path=None
+            self,
+            generator,
+            discriminator,
+            data,
+            gen_input,
+            steps_per_epoch=None,
+            epoch=30,
+            n_step_per_generator=1,
+            n_step_per_discriminator=1,
+            generator_lr=1e-4,
+            discriminator_lr=1e-4,
+            k=2,
+            p=6,
+            device=torch.device("cpu"),
+            n_epoch_per_evaluate=10,
+            image_save_path=None
     ):
         self.generator = generator
         self.discriminator = discriminator
         self.generator_lr = generator_lr
         self.discriminator_lr = discriminator_lr
-        self.weight_clips = weight_clips
         self.n_step_per_generator = n_step_per_generator
         self.n_step_per_discriminator = n_step_per_discriminator
+        self.k = k
+        self.p = p
         self.epoch = epoch
         self.n_epoch_per_evaluate = n_epoch_per_evaluate
         self.device = device
@@ -117,35 +118,29 @@ class Trainer:
         if self.image_save_path is not None and not os.path.exists(self.image_save_path):
             os.mkdir(self.image_save_path)
 
-        # self.loss = nn.BCELoss().to(self.device)
-
         self.generator = self.generator.to(self.device)
         self.discriminator = self.discriminator.to(self.device)
 
-        # self.optimizer_g = torch.optim.Adam(
-        #     params=self.generator.parameters(),
-        #     lr=self.generator_lr,
-        #     betas=(0.5, 0.999)
-        # )
-        # self.optimizer_d = torch.optim.Adam(
-        #     params=self.discriminator.parameters(),
-        #     lr=self.discriminator_lr,
-        #     betas=(0.5, 0.999)
-        # )
-        self.optimizer_g = torch.optim.RMSprop(
-            params=generator.parameters(),
-            lr=self.generator_lr)
-        self.optimizer_d = torch.optim.RMSprop(
-            params=discriminator.parameters(),
-            lr=discriminator_lr
+        self.optimizer_g = torch.optim.Adam(
+            params=self.generator.parameters(),
+            lr=self.generator_lr,
+            betas=(0.5, 0.999)
+        )
+        self.optimizer_d = torch.optim.Adam(
+            params=self.discriminator.parameters(),
+            lr=self.discriminator_lr,
+            betas=(0.5, 0.999)
         )
 
     def train(self):
         for epoch in range(self.epoch):
             start_time = time.time()
             for i, images in enumerate(self.data):
-                real_images = torch.autograd.Variable(torch.from_numpy(images)).to(self.device)
-                z = torch.from_numpy(np.random.normal(0, 1, (images.shape[0], self.gen_input))).type(torch.FloatTensor).to(self.device)
+                real_images = torch.autograd.Variable(torch.from_numpy(images), requires_grad=True).to(self.device)
+
+                z = torch.from_numpy(
+                    np.random.normal(0, 1, (images.shape[0], self.gen_input))
+                ).type(torch.FloatTensor).to(self.device)
 
                 self.discriminator.train()
                 self.generator.train()
@@ -157,21 +152,51 @@ class Trainer:
                 if i % self.n_step_per_discriminator == 0:
                     self.optimizer_d.zero_grad()  # 以前的梯度清空
 
-                    d_loss = -torch.mean(self.discriminator(real_images)) +\
-                              torch.mean(self.discriminator(gen_images.detach()))
+                    real_validity = self.discriminator(real_images)
+                    fake_validity = self.discriminator(gen_images)
+
+                    real_grad_out = torch.autograd.Variable(
+                        torch.FloatTensor(real_images.size(0), 1).fill_(1.0),
+                        requires_grad=False
+                    ).to(self.device)
+                    real_grad = torch.autograd.grad(
+                        real_validity,
+                        real_images,
+                        real_grad_out,
+                        create_graph=True,
+                        retain_graph=True,
+                        only_inputs=True
+                    )[0]
+                    real_grad_norm = real_grad.view(real_grad.size(0), -1).pow(2).sum(1) ** (self.p / 2)
+
+                    fake_grad_out = torch.autograd.Variable(
+                        torch.FloatTensor(gen_images.size(0), 1).fill_(1.0),
+                        requires_grad=False
+                    ).to(self.device)
+                    fake_grad = torch.autograd.grad(
+                        fake_validity,
+                        gen_images,
+                        fake_grad_out,
+                        create_graph=True,
+                        retain_graph=True,
+                        only_inputs=True
+                    )[0]
+                    fake_grad_norm = fake_grad.view(fake_grad.size(0), -1).pow(2).sum(1) ** (self.p / 2)
+
+                    div_gp = torch.mean(real_grad_norm + fake_grad_norm) * self.k / 2
+
+                    # Adversarial loss
+                    d_loss = -torch.mean(real_validity) + torch.mean(fake_validity) + div_gp
 
                     d_loss.backward()  # 梯度下降
-                    self.optimizer_d.step()   # 更新优化器
-
-                    # 权重截断
-                    for p in self.discriminator.parameters():
-                        p.data.clamp_(self.weight_clips[0], self.weight_clips[1])
+                    self.optimizer_d.step()  # 更新优化器
 
                 # -----------------
                 #  Train Generator
                 # -----------------
                 if i % self.n_step_per_generator == 0:
                     self.optimizer_g.zero_grad()
+                    gen_images = self.generator(z)
                     g_loss = -torch.mean(self.discriminator(gen_images))
                     g_loss.backward()
                     self.optimizer_g.step()
@@ -195,17 +220,16 @@ class Trainer:
 
             if (epoch == 0 or (epoch + 1) % self.n_epoch_per_evaluate == 0) and self.image_save_path:
                 eval_image = self.generate(n=10)
-                cv2.imwrite(f"{self.image_save_path}/epoch_{epoch+1}.png", eval_image)
+                cv2.imwrite(f"{self.image_save_path}/epoch_{epoch + 1}.png", eval_image)
 
     def generate(self, n=1):
         width = self.generator.width
         height = self.generator.width
         channels = self.generator.channels
 
-        z = torch.from_numpy(np.random.normal(0, 1, (n**2, self.gen_input))).type(torch.FloatTensor)
-        z = z.to(self.device)
+        z = torch.from_numpy(np.random.normal(0, 1, (n ** 2, self.gen_input))).type(torch.FloatTensor).to(self.device)
 
-        self.generator.train()
+        self.generator.eval()
         gen_images = self.generator(z).cpu().detach().numpy().transpose((0, 2, 3, 1))
 
         concat_images = np.zeros((height * n, width * n, channels))
@@ -218,5 +242,3 @@ class Trainer:
         concat_images = (concat_images + 1) / 2 * 255
         concat_images = np.round(concat_images, 0).astype(int)
         return concat_images
-
-

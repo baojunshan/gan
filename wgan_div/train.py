@@ -15,7 +15,8 @@ parser.add_argument("--batch", type=int, default=128)
 parser.add_argument("--seed", type=int, default=2021)
 parser.add_argument("--lr_g", type=float, default=2e-4)
 parser.add_argument("--lr_d", type=float, default=2e-4)
-parser.add_argument("--weight_clips", type=literal_eval, default='(-0.01, 0.01)')
+parser.add_argument("--k", type=int, default=2)
+parser.add_argument("--p", type=int, default=6)
 parser.add_argument("--image_shape", type=literal_eval, default='(1, 32, 32)')
 parser.add_argument("--latent_dim", type=int, default=100)
 parser.add_argument("--n_epoch_per_evaluate", type=int, default=20)
@@ -58,7 +59,8 @@ trainer = Trainer(
     epoch=config.epoch,
     generator_lr=config.lr_g,
     discriminator_lr=config.lr_d,
-    weight_clips=config.weight_clips,
+    p=config.p,
+    k=config.k,
     n_step_per_generator=config.n_step_per_g,
     n_step_per_discriminator=config.n_step_per_d,
     n_epoch_per_evaluate=config.n_epoch_per_evaluate,

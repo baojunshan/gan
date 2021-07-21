@@ -22,7 +22,9 @@ def run(gan_type="gan_mnist"):
 
 
 def main():
-    for t in ["gan_mnist", "gan_anime", "dcgan_mnist", "dcgan_anime", "lsgan_mnist", "lsgan_anime", "cgan_mnist"]:
+    # gan_types = ["gan_mnist", "gan_anime", "dcgan_mnist", "dcgan_anime", "lsgan_mnist", "lsgan_anime", "cgan_mnist"]
+    gan_types = ["wgan_mnist", "wgan_anime", "wgan_gp_mnist", "wgan_gp_anime", "wgan_div_mnist", "wgan_div_anime"]
+    for t in gan_types:
         run(t)
 
 

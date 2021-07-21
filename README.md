@@ -72,14 +72,40 @@ $ sh run_anime.sh
 
 
 ### WGAN
+```shell
+$ cd wgan
+$ sh run_mnist.sh
+$ sh run_anime.sh
+```
+<p float="left">
+    <img src="./results/wgan_mnist.gif" width="300" height="300"/><img src="./results/wgan_anime.gif" width="300" height="300"/>
+</p>
 
 ### WGAN-gp
+```shell
+$ cd wgan_gp
+$ sh run_mnist.sh
+$ sh run_anime.sh
+```
+<p float="left">
+    <img src="./results/wgan_gp_mnist.gif" width="300" height="300"/><img src="./results/wgan_gp_anime.gif" width="300" height="300"/>
+</p>
 
 ### WGAN-div
+```shell
+$ cd wgan_div
+$ sh run_mnist.sh
+$ sh run_anime.sh
+```
+<p float="left">
+    <img src="./results/wgan_div_mnist.gif" width="300" height="300"/><img src="./results/wgan_div_anime.gif" width="300" height="300"/>
+</p>
 
 ### SAGAN
 
+
 ### PGGAN
+
 
 ### CGAN
 ```shell
@@ -92,12 +118,18 @@ $ sh run_mnist.sh
 
 ### InfoGAN
 
+
 ### StyleGAN
+
 
 ### CCGAN
 
+
 ### Pix2Pix
+
 
 ### CycleGAN
 
+
 ### SRGAN
+
