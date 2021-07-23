@@ -25,7 +25,7 @@ Model | Paper | Code | Results |
 |&emsp;&boxvr;&nbsp;WGAN|[\[2017.01\] Wasserstein GAN](https://arxiv.org/abs/1701.07875)|[Code](./wgan)|[Results](https://github.com/baojunshan/gan#wgan)|
 |&emsp;&boxvr;&nbsp;WGAN-gp|[\[2017.04\] Improved Training of Wasserstein GANs](https://arxiv.org/abs/1704.00028)|[Code](./wgan_gp)|[Results](https://github.com/baojunshan/gan#wgan-gp)|
 |&emsp;&boxvr;&nbsp;WGAN-div|[\[2017.12\]Wasserstein Divergence for GANs](https://arxiv.org/abs/1712.01026)|[Code](./wgan_div)|[Results](https://github.com/baojunshan/gan#wgan-div)|
-|&emsp;&boxvr;&nbsp;SAGAN|||[Results](https://github.com/baojunshan/gan#sagan)|
+|&emsp;&boxvr;&nbsp;SAGAN|[\[Self-Attention Generative Adversarial Networks\]](https://arxiv.org/abs/1805.08318)|[Code](./sagan)|[Results](https://github.com/baojunshan/gan#sagan)|
 |&emsp;&boxur;&nbsp;PGGAN|||[Results](https://github.com/baojunshan/gan#pggan)|
 |**Conditional**|||
 |&emsp;&boxvr;&nbsp;CGAN|[\[2014.11\] Conditional Generative Adversarial Nets](https://arxiv.org/abs/1411.1784)|[Code](./cgan)|[Results](https://github.com/baojunshan/gan#cgan)|
